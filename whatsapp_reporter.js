@@ -7,6 +7,7 @@ const http = require('http');
 
 let globalSock = null;
 let globalJid = null;
+let isCronStarted = false;
 
 // Database configuration from environment variables
 const dbConfig = {
@@ -42,25 +43,34 @@ async function connectToWhatsApp() {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const isConflict = lastDisconnect.error?.data?.tag === 'stream:error';
+            const shouldReconnect = !isConflict && (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
             if (shouldReconnect) {
-                connectToWhatsApp();
+                // Add a delay before reconnecting to avoid rapid reconnections
+                setTimeout(() => connectToWhatsApp(), 3000);
             }
         } else if (connection === 'open') {
             require('fs').writeFileSync('qr_code.txt', 'CONNECTED');
             console.log('WhatsApp connected successfully!');
             
-            // Send connection success message to the connected user's own number
+            // Send connection success message only once
             const userJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
             globalJid = userJid;
             
-            await sock.sendMessage(userJid, { 
-                text: '✅ *Manufacturing ERP*\nWhatsApp integration has been connected successfully! You will now receive automated reports here.' 
-            });
-
-            // Start the reporting cron job
-            startReportingCron(sock, userJid);
+            if (!isCronStarted) {
+                try {
+                    await sock.sendMessage(userJid, { 
+                        text: '✅ *Manufacturing ERP*\nWhatsApp integration has been connected successfully! You will now receive automated reports here.' 
+                    });
+                } catch (err) {
+                    console.error('Failed to send welcome message:', err);
+                }
+                
+                // Start the reporting cron job only once
+                startReportingCron(sock, userJid);
+                isCronStarted = true;
+            }
         }
     });
 }
