@@ -1,0 +1,17 @@
+{
+  "name": "manufacture-erp-whatsapp",
+  "version": "1.0.0",
+  "description": "WhatsApp Reporting Engine for Manufacturing ERP",
+  "main": "whatsapp_reporter.js",
+  "scripts": {
+    "start": "node whatsapp_reporter.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.5",
+    "mysql2": "^3.9.7",
+    "node-cron": "^3.0.3",
+    "puppeteer": "^22.7.1",
+    "qrcode-terminal": "^0.12.0",
+    "pino": "^8.20.0"
+  }
+}
