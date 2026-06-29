@@ -6,19 +6,35 @@ const REDIS_URL = process.env.REDIS_URL;
 let redisClient = null;
 
 async function getRedisClient() {
-  if (!REDIS_URL) return null;
-  
-  if (!redisClient) {
-    redisClient = createClient({ url: REDIS_URL });
-    redisClient.on('error', (err) => console.warn('Redis Client Error (falling back to file storage)', err));
-    try {
-      await redisClient.connect();
-    } catch (e) {
-      console.warn('Failed to connect to Redis (falling back to file storage)', e);
-      redisClient = null;
+    if (!REDIS_URL) {
+        console.log('REDIS_URL not found - using file-based auth storage');
+        return null;
     }
-  }
-  return redisClient;
+    
+    console.log('REDIS_URL found - attempting to connect to Redis...');
+    
+    if (!redisClient) {
+        redisClient = createClient({ 
+            url: REDIS_URL,
+            socket: {
+                reconnectStrategy: (retries) => Math.min(retries * 50, 500)
+            }
+        });
+        redisClient.on('error', (err) => {
+            console.warn('Redis Client Error (falling back to file storage):', err.message);
+        });
+        redisClient.on('connect', () => {
+            console.log('✅ Successfully connected to Redis!');
+        });
+        try {
+            await redisClient.connect();
+            console.log('✅ Redis connection established!');
+        } catch (e) {
+            console.warn('❌ Failed to connect to Redis (falling back to file storage):', e.message);
+            redisClient = null;
+        }
+    }
+    return redisClient;
 }
 
 async function useRedisAuthState(prefix = 'baileys_auth') {

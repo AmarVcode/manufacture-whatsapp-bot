@@ -2,12 +2,14 @@ services:
   - type: web
     name: manufacture-erp
     env: node
-    plan: free
+    plan: starter  # Free tier has limited resources - consider upgrading if needed
     buildCommand: npm install
     startCommand: node whatsapp_reporter.js
     envVars:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "true"
+      - key: NODE_ENV
+        value: production
       - key: DB_HOST
         fromDatabase:
           name: erp-database
@@ -33,7 +35,7 @@ services:
   - type: redis
     name: erp-redis
     ipAllowList: []
-    plan: free
+    plan: starter  # Free tier has limited resources
 
 databases:
   - name: erp-database

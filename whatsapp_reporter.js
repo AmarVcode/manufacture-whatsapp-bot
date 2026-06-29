@@ -11,6 +11,7 @@ let globalJid = null;
 let isCronStarted = false;
 let currentQR = null;
 let isConnected = false;
+let reconnectAttempts = 0;
 
 // Database configuration from environment variables
 const dbConfig = {
@@ -28,17 +29,31 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: pino({ level: 'silent' }), // Suppress excessive logs
-        printQRInTerminal: false // We will handle it manually using qrcode-terminal
+        logger: pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' }),
+        printQRInTerminal: false,
+        // Production optimizations
+        markOnlineOnConnect: true,
+        keepAliveIntervalMs: 30000, // 30 seconds
+        syncFullHistory: false
     });
     
     globalSock = sock;
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', async () => {
+        console.log('Credentials updated - saving to storage...');
+        try {
+            await saveCreds();
+            console.log('Credentials saved successfully!');
+        } catch (err) {
+            console.error('Error saving credentials:', err);
+        }
+    });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        console.log('Connection update:', update);
+        console.log('=== Connection Update ===');
+        console.log('Update:', JSON.stringify(update, null, 2));
+        console.log('========================');
 
         if (qr) {
             console.log('Scan the QR code below to link WhatsApp:');
@@ -50,15 +65,29 @@ async function connectToWhatsApp() {
 
         if (connection === 'close') {
             isConnected = false;
-            const isConflict = lastDisconnect.error?.data?.tag === 'stream:error';
-            const shouldReconnect = !isConflict && (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
-            console.log('Disconnect reason:', lastDisconnect.error?.output?.statusCode);
-            if (shouldReconnect) {
-                // Add a delay before reconnecting to avoid rapid reconnections
-                setTimeout(() => connectToWhatsApp(), 3000);
+            const statusCode = lastDisconnect.error?.output?.statusCode;
+            const isConflict = lastDisconnect.error?.data?.tag === 'stream:error' && statusCode === 401;
+            const isRestartRequired = statusCode === 515;
+            const shouldReconnect = !isConflict && statusCode !== DisconnectReason.loggedOut;
+            
+            console.log('Connection closed due to:', lastDisconnect.error);
+            console.log('Status code:', statusCode);
+            console.log('Should reconnect:', shouldReconnect);
+            
+            if (shouldReconnect || isRestartRequired) {
+                // Exponential backoff with jitter
+                reconnectAttempts++;
+                const baseDelay = isRestartRequired ? 10000 : 3000; // 10 sec for 515, 3 sec otherwise
+                const maxDelay = 60000; // Max 1 minute delay
+                const delay = Math.min(baseDelay * Math.pow(1.5, reconnectAttempts), maxDelay);
+                const jitter = Math.random() * 1000; // Add 0-1 sec jitter to avoid thundering herd
+                
+                console.log(`Reconnecting in ${Math.round((delay + jitter) / 1000)} seconds... (Attempt ${reconnectAttempts})`);
+                setTimeout(() => connectToWhatsApp(), delay + jitter);
             }
         } else if (connection === 'open') {
+            // Reset reconnect counter when connection succeeds
+            reconnectAttempts = 0;
             isConnected = true;
             currentQR = null;
             try { require('fs').writeFileSync('qr_code.txt', 'CONNECTED'); } catch(e){}
