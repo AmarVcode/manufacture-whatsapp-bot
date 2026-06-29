@@ -1,37 +1,34 @@
-FROM php:8.2-apache
+FROM node:20
 
-# Install Node.js, Puppeteer dependencies (Chromium), and MySQL extensions
+# Install Puppeteer dependencies
 RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
     libnss3 \
     libxss1 \
     libasound2 \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
     libgbm-dev \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && docker-php-ext-install pdo pdo_mysql
+    wget \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Set working directory
+WORKDIR /app
 
-# Set working directory to Apache web root
-WORKDIR /var/www/html
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
 
 # Copy all project files
 COPY . .
 
-# Install Node dependencies
-RUN npm install
+# Create directories for auth info (though Render free tier doesn't have persistent storage)
+RUN mkdir -p baileys_auth_info
 
-# Expose port 80 for Render Web Service
-EXPOSE 80
+# Expose port (will use PORT env var)
+EXPOSE 10000
 
-# Create a startup script
-RUN echo "#!/bin/bash\napache2-foreground & node whatsapp_reporter.js\nwait -n\nexit \$?" > /start.sh
-RUN chmod +x /start.sh
-
-# Run the startup script
-CMD ["/start.sh"]
+# Start the app
+CMD ["node", "whatsapp_reporter.js"]

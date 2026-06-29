@@ -8,12 +8,12 @@ const http = require('http');
 let globalSock = null;
 let globalJid = null;
 
-// Database configuration
+// Database configuration from environment variables
 const dbConfig = {
-    host: '127.0.0.1', // Or the Render MySQL host
-    user: 'root',
-    password: '',
-    database: 'manufacturing_erp'
+    host: process.env.DB_HOST || '127.0.0.1',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'manufacturing_erp'
 };
 
 async function connectToWhatsApp() {
@@ -130,6 +130,18 @@ connectToWhatsApp();
 
 // HTTP Server to accept API requests
 const server = http.createServer(async (req, res) => {
+    // Add CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Handle preflight OPTIONS requests
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
     res.setHeader('Content-Type', 'application/json');
     if (req.method === 'POST' && req.url === '/send') {
         let body = '';
@@ -168,6 +180,7 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-server.listen(3001, () => {
-    console.log('Local API Server listening on port 3001');
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
 });

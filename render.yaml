@@ -3,15 +3,28 @@ services:
     name: manufacture-erp
     env: docker
     plan: free
-    dockerCommand: "/start.sh"
     envVars:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "true"
-      - key: PUPPETEER_EXECUTABLE_PATH
-        value: "/usr/bin/google-chrome-stable"
+      - key: DB_HOST
+        fromDatabase:
+          name: erp-database
+          property: host
+      - key: DB_USER
+        fromDatabase:
+          name: erp-database
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: erp-database
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: erp-database
+          property: database
 
 databases:
   - name: erp-database
     databaseName: manufacturing_erp
-    user: root
+    user: admin
     plan: free
