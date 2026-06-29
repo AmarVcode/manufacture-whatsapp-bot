@@ -1,4 +1,5 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { useRedisAuthState, getRedisClient } = require('./redis-auth');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const mysql = require('mysql2/promise');
@@ -18,7 +19,7 @@ const dbConfig = {
 };
 
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info');
+    const { state, saveCreds } = await useRedisAuthState('whatsapp_bot');
     const { version, isLatest } = await fetchLatestBaileysVersion();
     console.log(`Using WA v${version.join('.')}, isLatest: ${isLatest}`);
 
@@ -176,8 +177,15 @@ const server = http.createServer(async (req, res) => {
             } catch (e) {
                 console.error('Logout error', e);
             }
-            try { require('fs').unlinkSync('qr_code.txt'); } catch(e){}
-            try { require('fs').rmSync('baileys_auth_info', { recursive: true, force: true }); } catch(e){}
+            try {
+                const redis = await getRedisClient();
+                const keys = await redis.keys('whatsapp_bot:*');
+                if (keys.length > 0) {
+                    await redis.del(keys);
+                }
+            } catch (e) {
+                console.error('Error clearing Redis data', e);
+            }
             res.end(JSON.stringify({ success: true }));
             console.log('Logged out successfully. Restarting process...');
             process.exit(0);

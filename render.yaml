@@ -22,6 +22,16 @@ services:
         fromDatabase:
           name: erp-database
           property: database
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: erp-redis
+          property: connectionString
+
+  - type: redis
+    name: erp-redis
+    ipAllowList: []
+    plan: free
 
 databases:
   - name: erp-database
