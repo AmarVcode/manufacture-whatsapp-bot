@@ -3,6 +3,8 @@ services:
     name: manufacture-erp
     env: docker
     plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "true"
