@@ -9,6 +9,8 @@ const http = require('http');
 let globalSock = null;
 let globalJid = null;
 let isCronStarted = false;
+let currentQR = null;
+let isConnected = false;
 
 // Database configuration from environment variables
 const dbConfig = {
@@ -40,10 +42,13 @@ async function connectToWhatsApp() {
         if (qr) {
             console.log('Scan the QR code below to link WhatsApp:');
             qrcode.generate(qr, { small: true });
-            require('fs').writeFileSync('qr_code.txt', qr);
+            currentQR = qr;
+            isConnected = false;
+            try { require('fs').writeFileSync('qr_code.txt', qr); } catch(e){}
         }
 
         if (connection === 'close') {
+            isConnected = false;
             const isConflict = lastDisconnect.error?.data?.tag === 'stream:error';
             const shouldReconnect = !isConflict && (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
@@ -52,7 +57,9 @@ async function connectToWhatsApp() {
                 setTimeout(() => connectToWhatsApp(), 3000);
             }
         } else if (connection === 'open') {
-            require('fs').writeFileSync('qr_code.txt', 'CONNECTED');
+            isConnected = true;
+            currentQR = null;
+            try { require('fs').writeFileSync('qr_code.txt', 'CONNECTED'); } catch(e){}
             console.log('WhatsApp connected successfully!');
             
             // Send connection success message only once
@@ -65,7 +72,7 @@ async function connectToWhatsApp() {
                         text: '✅ *Manufacturing ERP*\nWhatsApp integration has been connected successfully! You will now receive automated reports here.' 
                     });
                 } catch (err) {
-                    console.error('Failed to send welcome message:', err);
+                    console.error('Failed to send welcome message', err);
                 }
                 
                 // Start the reporting cron job only once
@@ -139,7 +146,10 @@ function startReportingCron(sock, targetJid) {
 
 connectToWhatsApp();
 
-// HTTP Server to accept API requests
+// HTTP Server to accept API requests and serve static files
+const fs = require('fs');
+const path = require('path');
+
 const server = http.createServer(async (req, res) => {
     // Add CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -153,8 +163,26 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    res.setHeader('Content-Type', 'application/json');
-    if (req.method === 'POST' && req.url === '/send') {
+    if (req.method === 'GET' && req.url === '/') {
+        // Serve index.html
+        const indexPath = path.join(__dirname, 'index.html');
+        fs.readFile(indexPath, (err, content) => {
+            if (err) {
+                res.writeHead(500);
+                res.end('Error loading index.html');
+            } else {
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(content);
+            }
+        });
+    } else if (req.method === 'GET' && req.url === '/status') {
+        // Return status and QR code
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            connected: isConnected, 
+            qr: currentQR 
+        }));
+    } else if (req.method === 'POST' && req.url === '/send') {
         let body = '';
         req.on('data', chunk => body += chunk.toString());
         req.on('end', async () => {
@@ -186,7 +214,6 @@ const server = http.createServer(async (req, res) => {
                     }
                 } else {
                     // Fallback to file system
-                    const fs = require('fs');
                     try { fs.unlinkSync('qr_code.txt'); } catch(e){}
                     try { fs.rmSync('baileys_auth_info', { recursive: true, force: true }); } catch(e){}
                 }

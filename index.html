@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot - Link & Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .status {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .qr-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+        }
+        #qr-code {
+            margin-bottom: 15px;
+        }
+        .message {
+            color: #666;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .btn {
+            width: 100%;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-logout {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-logout:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Manufacturing ERP</h1>
+        <p style="color: #666; margin-bottom: 15px;">WhatsApp Integration</p>
+        <div id="status-badge" class="status">Checking status...</div>
+        
+        <div class="qr-container" id="qr-container">
+            <div class="spinner"></div>
+        </div>
+        
+        <button id="logout-btn" class="btn btn-logout" disabled>Logout</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        let statusInterval;
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('status-badge');
+                const qrContainer = document.getElementById('qr-container');
+                const logoutBtn = document.getElementById('logout-btn');
+                
+                if (data.connected) {
+                    statusBadge.textContent = '✅ Connected';
+                    statusBadge.className = 'status connected';
+                    logoutBtn.disabled = false;
+                    qrContainer.innerHTML = '<p class="message">WhatsApp is connected and ready to use!</p>';
+                } else {
+                    statusBadge.textContent = '🔌 Disconnected';
+                    statusBadge.className = 'status disconnected';
+                    logoutBtn.disabled = true;
+                    
+                    if (data.qr) {
+                        qrContainer.innerHTML = '<div id="qr-code"></div><p class="message">Scan this QR code with WhatsApp to link your account</p>';
+                        new QRCode(document.getElementById('qr-code'), {
+                            text: data.qr,
+                            width: 256,
+                            height: 256,
+                            colorDark : '#000000',
+                            colorLight : '#ffffff',
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
+                    } else {
+                        qrContainer.innerHTML = '<p class="message">Waiting for QR code...<br>The bot will generate a QR code shortly.</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+                const qrContainer = document.getElementById('qr-container');
+                qrContainer.innerHTML = '<p class="message">Error connecting to server. Please refresh the page.</p>';
+            }
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to log out? This will clear your WhatsApp credentials.')) {
+                const btn = document.getElementById('logout-btn');
+                btn.disabled = true;
+                btn.textContent = 'Logging out...';
+                
+                try {
+                    await fetch('/logout', { method: 'POST' });
+                    alert('Logged out successfully! The page will refresh.');
+                    location.reload();
+                } catch (error) {
+                    console.error('Error logging out:', error);
+                    alert('Error logging out. Please try again.');
+                    btn.disabled = false;
+                    btn.textContent = 'Logout';
+                }
+            }
+        });
+
+        checkStatus();
+        statusInterval = setInterval(checkStatus, 2000);
+    </script>
+</body>
+</html>
