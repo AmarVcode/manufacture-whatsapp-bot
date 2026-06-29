@@ -152,7 +152,16 @@
                             correctLevel : QRCode.CorrectLevel.H
                         });
                     } else {
-                        qrContainer.innerHTML = '<p class="message">Waiting for QR code...<br>The bot will generate a QR code shortly.</p>';
+                        qrContainer.innerHTML = `
+                            <p class="message"><strong>⚠️ Connection Conflict</strong></p>
+                            <p class="message" style="margin-top: 10px; font-size: 13px;">
+                                Another instance of the bot is already connected to this WhatsApp account.<br><br>
+                                Please:<br>
+                                1. Stop the bot on Render (if deployed)<br>
+                                2. Close any other terminal windows running this bot<br>
+                                3. Wait 30 seconds, then refresh this page
+                            </p>
+                        `;
                     }
                 }
             } catch (error) {

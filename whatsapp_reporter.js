@@ -38,6 +38,7 @@ async function connectToWhatsApp() {
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
+        console.log('Connection update:', update);
 
         if (qr) {
             console.log('Scan the QR code below to link WhatsApp:');
@@ -52,6 +53,7 @@ async function connectToWhatsApp() {
             const isConflict = lastDisconnect.error?.data?.tag === 'stream:error';
             const shouldReconnect = !isConflict && (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
+            console.log('Disconnect reason:', lastDisconnect.error?.output?.statusCode);
             if (shouldReconnect) {
                 // Add a delay before reconnecting to avoid rapid reconnections
                 setTimeout(() => connectToWhatsApp(), 3000);
@@ -65,6 +67,7 @@ async function connectToWhatsApp() {
             // Send connection success message only once
             const userJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
             globalJid = userJid;
+            console.log('Connected as:', userJid);
             
             if (!isCronStarted) {
                 try {
