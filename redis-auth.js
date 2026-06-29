@@ -1,52 +1,55 @@
 const { createClient } = require('redis');
-const { proto } = require('@whiskeysockets/baileys');
+const { proto, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = process.env.REDIS_URL;
 
 let redisClient = null;
 
 async function getRedisClient() {
+  if (!REDIS_URL) return null;
+  
   if (!redisClient) {
     redisClient = createClient({ url: REDIS_URL });
-    redisClient.on('error', (err) => console.error('Redis Client Error', err));
-    await redisClient.connect();
+    redisClient.on('error', (err) => console.warn('Redis Client Error (falling back to file storage)', err));
+    try {
+      await redisClient.connect();
+    } catch (e) {
+      console.warn('Failed to connect to Redis (falling back to file storage)', e);
+      redisClient = null;
+    }
   }
   return redisClient;
 }
 
 async function useRedisAuthState(prefix = 'baileys_auth') {
   const client = await getRedisClient();
+  
+  if (!client) {
+    console.log('Using file-based auth storage');
+    return await useMultiFileAuthState('baileys_auth_info');
+  }
 
-  const saveCreds = async (creds) => {
+  console.log('Using Redis auth storage');
+  
+  const saveCredsToRedis = async (creds) => {
     await client.set(`${prefix}:creds`, JSON.stringify(creds));
   };
 
-  const loadCreds = async () => {
+  const loadCredsFromRedis = async () => {
     const data = await client.get(`${prefix}:creds`);
     return data ? JSON.parse(data) : null;
   };
 
-  const saveKey = async (type, id, key) => {
+  const saveKeyToRedis = async (type, id, key) => {
     await client.set(`${prefix}:keys:${type}:${id}`, JSON.stringify(key));
   };
 
-  const loadKey = async (type, id) => {
+  const loadKeyFromRedis = async (type, id) => {
     const data = await client.get(`${prefix}:keys:${type}:${id}`);
     return data ? JSON.parse(data) : null;
   };
 
-  const removeKey = async (type, id) => {
-    await client.del(`${prefix}:keys:${type}:${id}`);
-  };
-
-  const clearAll = async () => {
-    const keys = await client.keys(`${prefix}:*`);
-    if (keys.length > 0) {
-      await client.del(keys);
-    }
-  };
-
-  const creds = await loadCreds();
+  const creds = await loadCredsFromRedis();
 
   return {
     state: {
@@ -79,7 +82,7 @@ async function useRedisAuthState(prefix = 'baileys_auth') {
         get: async (type, ids) => {
           const data = {};
           for (const id of ids) {
-            const val = await loadKey(type, id);
+            const val = await loadKeyFromRedis(type, id);
             if (val) {
               data[id] = type === 'app-state-sync-key' ? proto.Message.AppStateSyncKeyData.decode(Buffer.from(val.data, 'base64')) : val;
             }
@@ -93,15 +96,20 @@ async function useRedisAuthState(prefix = 'baileys_auth') {
               if (type === 'app-state-sync-key') {
                 val = { data: proto.Message.AppStateSyncKeyData.encode(val).finish().toString('base64') };
               }
-              await saveKey(type, id, val);
+              await saveKeyToRedis(type, id, val);
             }
           }
         },
-        clear: async () => await clearAll()
+        clear: async () => {
+          const keys = await client.keys(`${prefix}:*`);
+          if (keys.length > 0) {
+            await client.del(keys);
+          }
+        }
       }
     },
     saveCreds: async () => {
-      await saveCreds(state.creds);
+      await saveCredsToRedis(state.creds);
     }
   };
 }

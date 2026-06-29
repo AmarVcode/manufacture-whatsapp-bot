@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "WhatsApp Reporting Engine for Manufacturing ERP",
   "main": "whatsapp_reporter.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node whatsapp_reporter.js"
   },

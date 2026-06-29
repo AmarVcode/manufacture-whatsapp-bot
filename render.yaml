@@ -1,10 +1,10 @@
 services:
   - type: web
     name: manufacture-erp
-    env: docker
+    env: node
     plan: free
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    buildCommand: npm install
+    startCommand: node whatsapp_reporter.js
     envVars:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "true"

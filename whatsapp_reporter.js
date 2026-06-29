@@ -179,12 +179,19 @@ const server = http.createServer(async (req, res) => {
             }
             try {
                 const redis = await getRedisClient();
-                const keys = await redis.keys('whatsapp_bot:*');
-                if (keys.length > 0) {
-                    await redis.del(keys);
+                if (redis) {
+                    const keys = await redis.keys('whatsapp_bot:*');
+                    if (keys.length > 0) {
+                        await redis.del(keys);
+                    }
+                } else {
+                    // Fallback to file system
+                    const fs = require('fs');
+                    try { fs.unlinkSync('qr_code.txt'); } catch(e){}
+                    try { fs.rmSync('baileys_auth_info', { recursive: true, force: true }); } catch(e){}
                 }
             } catch (e) {
-                console.error('Error clearing Redis data', e);
+                console.error('Error clearing auth data', e);
             }
             res.end(JSON.stringify({ success: true }));
             console.log('Logged out successfully. Restarting process...');
